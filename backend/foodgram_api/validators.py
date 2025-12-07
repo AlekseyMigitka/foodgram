@@ -1,7 +1,7 @@
 import re
 
 from django.core.exceptions import ValidationError
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext
 
 
 class ForbiddenSymbolsPasswordValidator:
@@ -15,12 +15,13 @@ class ForbiddenSymbolsPasswordValidator:
     def validate(self, password, user=None):
         if re.search(self.forbidden_chars, password):
             raise ValidationError(
-                _("Пароль содержит недопустимые символы: пробел, кавычки, "
-                  "/ или \\."),
+                gettext(
+                    "Пароль содержит недопустимые символы"
+                ),
                 code='invalid_characters'
             )
 
     def get_help_text(self):
-        return _(
+        return gettext(
             "Ваш пароль не должен содержать пробелы, кавычки, / или \\."
         )
