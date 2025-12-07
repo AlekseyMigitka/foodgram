@@ -2,7 +2,6 @@ import re
 
 from django.core.exceptions import ValidationError
 
-
 USERNAME_REGEX = r'^[\w.@+-]+\Z'
 USERNAME_INVALID_CHARS_MESSAGE = (
     'Username содержит недопустимые символы: '

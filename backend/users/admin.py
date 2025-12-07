@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from users.models import User, Subscription
+from users.models import Subscription, User
 
 
 @admin.register(User)
@@ -37,9 +37,10 @@ class UserAdmin(UserAdmin):
 
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
-    """Админка для модели Follow."""
+    """Админка для модели Subscription."""
 
     list_display = ('id', 'user', 'author')
     search_fields = ('user__username', 'author__username')
     list_filter = ('user', 'author')
+    autocomplete_fields = ['user', 'author']
     ordering = ('id',)

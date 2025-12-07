@@ -1,14 +1,25 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-SECRET_KEY = 'django-insecure-y^0p@8m4v^f4ey*nrbppj&3q7@xrroj86ia6(z*56&y#1yfh85'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:9000",
+    "http://127.0.0.1:9000",
+    "http://62.84.122.237",
+]
 
 
 INSTALLED_APPS = [
@@ -59,8 +70,12 @@ WSGI_APPLICATION = 'foodgram_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('POSTGRES_DB', 'foodgram_db'),
+        'USER': os.getenv('POSTGRES_USER', 'foodgram_user'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'db'),
+        'PORT': os.getenv('DB_PORT', 5432)
     }
 }
 
@@ -73,11 +88,10 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'user': '10000/day',
-        'anon': '1000/day',
+        'user': '2500/day',
+        'anon': '500/day',
     },
-    'DEFAULT_PAGINATION_CLASS':
-        'foodgram_api.pagination.LimitPagination',
+    'DEFAULT_PAGINATION_CLASS': 'foodgram_api.pagination.LimitPagination',
     'PAGE_SIZE': 6,
 }
 
@@ -122,10 +136,10 @@ USE_I18N = True
 
 USE_TZ = True
 
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_URL = '/static/'
+STATIC_ROOT = '/app/staticfiles/'
 
-MEDIA_URL = 'media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/'
+MEDIA_ROOT = '/app/media/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
