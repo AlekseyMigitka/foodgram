@@ -53,5 +53,5 @@ class FavoriteAdmin(admin.ModelAdmin):
     """Админка для модели Favorite."""
 
     list_display = ('id', 'user', 'recipe')
-    search_fields = ('user__username', 'recipe__name')
+    search_fields = ('user__email', 'recipe__name')
     list_filter = ('user', 'recipe')
