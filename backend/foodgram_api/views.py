@@ -1,5 +1,7 @@
+from django.db.models import Sum
 from djoser.views import UserViewSet as DjoserUserViewSet
 from django.http import HttpResponse
+from http import HTTPStatus
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -22,7 +24,7 @@ from foodgram_api.serializers import (
 from foodgram_api.filters import RecipeFilter, IngredientFilter
 from foodgram_api.permissions import IsAuthorOrReadOnly
 from recipes.models import (
-    Ingredient, Tag, Recipe, Purchase, Favorite
+    Ingredient, Tag, Recipe, Purchase, Favorite, RecipeIngredient
 )
 from users.models import User, Subscription
 
@@ -116,18 +118,21 @@ class UserViewSet(DjoserUserViewSet):
         try:
             author = User.objects.get(id=id)
         except User.DoesNotExist:
-            return Response({"detail": "Автор не найден"}, status=404)
+            return Response(
+                {"detail": "Автор не найден"},
+                status=HTTPStatus.NOT_FOUND
+            )
 
         if request.method == "POST":
             if user == author:
                 return Response(
                     {"errors": "Нельзя подписаться на самого себя"},
-                    status=400
+                    status=HTTPStatus.BAD_REQUEST
                 )
-            if Subscription.objects.filter(user=user, author=author).exists():
+            if user.follower.filter(author=author).exists():
                 return Response(
                     {"errors": "Подписка уже существует"},
-                    status=400
+                    status=HTTPStatus.BAD_REQUEST
                 )
 
             Subscription.objects.create(user=user, author=author)
@@ -135,16 +140,17 @@ class UserViewSet(DjoserUserViewSet):
                 author,
                 context={"request": request}
             )
-            return Response(serializer.data, status=201)
+            return Response(serializer.data, status=HTTPStatus.CREATED)
 
-        deleted = Subscription.objects.filter(
-            user=user,
-            author=author
-        ).delete()
-        if deleted[0] == 0:
-            return Response({"errors": "Подписка не существует"}, status=400)
+        deleted_count = user.follower.filter(author=author).delete()[0]
 
-        return Response(status=204)
+        if deleted_count == 0:
+            return Response(
+                {"errors": "Подписка не существует"},
+                status=HTTPStatus.BAD_REQUEST
+            )
+
+        return Response(status=HTTPStatus.NO_CONTENT)
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
@@ -196,10 +202,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         user = request.user
 
         if request.method == 'POST':
-            if Favorite.objects.filter(user=user, recipe=recipe).exists():
+            if user.favorites.filter(recipe=recipe).exists():
                 return Response(
                     {"errors": "Рецепт уже в избранном"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=HTTPStatus.BAD_REQUEST
                 )
             Favorite.objects.create(user=user, recipe=recipe)
             serializer = ShortRecipeSerializer(
@@ -207,10 +213,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        deleted_count = Favorite.objects.filter(
-            user=user,
-            recipe=recipe
-        ).delete()[0]
+        deleted_count = user.favorites.filter(recipe=recipe).delete()[0]
         if deleted_count == 0:
             return Response(
                 {"errors": "Рецепт не в избранном"},
@@ -229,7 +232,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         user = request.user
 
         if request.method == 'POST':
-            if Purchase.objects.filter(user=user, recipe=recipe).exists():
+            if user.purchases.filter(recipe=recipe).exists():
                 return Response(
                     {"errors": "Рецепт уже в списке покупок"},
                     status=status.HTTP_400_BAD_REQUEST
@@ -242,7 +245,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         if request.method == 'DELETE':
-            purchase = Purchase.objects.filter(user=user, recipe=recipe)
+            purchase = user.purchases.filter(recipe=recipe)
             if purchase.exists():
                 purchase.delete()
                 return Response(status=status.HTTP_204_NO_CONTENT)
@@ -260,7 +263,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def download_shopping_cart(self, request):
         """Скачивание списка покупок пользователя."""
         user = request.user
-        purchases = Purchase.objects.filter(user=user).select_related('recipe')
+        purchases = user.purchases.select_related('recipe')
 
         if not purchases.exists():
             return Response(
@@ -268,33 +271,26 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        ingredients_totals = {}
-
-        for purchase in purchases:
-            recipe = purchase.recipe
-            for recipe_ingredient in recipe.recipe_ingredients.all():
-                ingredient_name = recipe_ingredient.ingredient.name
-                if ingredient_name in ingredients_totals:
-                    ingredients_totals[ingredient_name]["amount"] += (
-                        recipe_ingredient.amount
-                    )
-                else:
-                    ingredients_totals[ingredient_name] = {
-                        "amount": recipe_ingredient.amount,
-                        "measurement_unit":
-                            recipe_ingredient.ingredient.measurement_unit
-                    }
+        ingredients = (
+            RecipeIngredient.objects
+            .filter(recipe__purchased_by__user=user)
+            .values(
+                'ingredient__name',
+                'ingredient__measurement_unit'
+            )
+            .annotate(total_amount=Sum('amount'))
+            .order_by('ingredient__name')
+        )
 
         lines = ["Список покупок:\n"]
-        for ingredient_name, data in ingredients_totals.items():
+        for item in ingredients:
             lines.append(
-                f"- {ingredient_name} — {data['amount']}"
-                f"{data['measurement_unit']}"
+                f"- {item['ingredient__name']} — {item['total_amount']}"
+                f"{item['ingredient__measurement_unit']}"
             )
 
         response_text = "\n".join(lines)
-        response = HttpResponse(response_text, content_type='text/plain')
-        return response
+        return HttpResponse(response_text, content_type='text/plain')
 
     @action(
         detail=True,

@@ -4,9 +4,10 @@ from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
 from recipes.models import (
-    Ingredient, Tag, RecipeIngredient, Recipe,
+    Ingredient, Tag, RecipeIngredient, Recipe, MAX_INGREDIENT_AMOUNT,
+    MIN_INGREDIENT_AMOUNT, MIN_COOKING_TIME, MAX_COOKING_TIME
 )
-from users.models import User, Subscription
+from users.models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -113,7 +114,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     def get_is_subscribed(self, obj):
         user = self.context["request"].user
-        return Subscription.objects.filter(user=user, author=obj).exists()
+        return user.follower.filter(author=obj).exists()
 
     def get_recipes(self, obj):
         request = self.context["request"]
@@ -170,7 +171,11 @@ class IngredientAmountSerializer(serializers.Serializer):
     id = serializers.PrimaryKeyRelatedField(
         queryset=Ingredient.objects.all()
     )
-    amount = serializers.IntegerField(min_value=1)
+    amount = serializers.IntegerField(
+        min_value=MIN_INGREDIENT_AMOUNT,
+        max_value=MAX_INGREDIENT_AMOUNT,
+        help_text='Количество ингредиента'
+    )
 
 
 class IngredientInRecipeSerializer(serializers.ModelSerializer):
@@ -246,6 +251,10 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         many=True, queryset=Tag.objects.all()
     )
     image = Base64ImageField(required=True)
+    cooking_time = serializers.IntegerField(
+        min_value=MIN_COOKING_TIME,
+        max_value=MAX_COOKING_TIME,
+    )
 
     class Meta:
         model = Recipe
@@ -260,64 +269,34 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        errors = {}
+        ingredients = attrs.get('ingredients')
+        tags = attrs.get('tags')
 
-        ingredients = attrs.get('ingredients') or []
         if not ingredients:
-            errors['ingredients'] = 'Нужен хотя бы один ингредиент.'
-        else:
-            seen = set()
-            for item in ingredients:
-                ingredient_obj = item.get('id')
-                amount = item.get('amount')
-                if ingredient_obj is None or amount is None:
-                    errors['ingredients'] = (
-                        'Каждый ингредиент должен содержать id и amount.'
-                    )
-                    break
-                try:
-                    ingredient_id = (
-                        ingredient_obj.id if hasattr(ingredient_obj, 'id')
-                        else int(ingredient_obj)
-                    )
-                except Exception:
-                    errors['ingredients'] = 'Неверный id ингредиента.'
-                    break
-                if ingredient_id in seen:
-                    errors['ingredients'] = (
-                        'Ингредиенты не должны дублироваться.'
-                    )
-                    break
-                seen.add(ingredient_id)
-                if amount <= 0:
-                    errors['ingredients'] = (
-                        'Количество ингредиента должно быть положительным.'
-                    )
-                    break
+            raise serializers.ValidationError({
+                'ingredients': 'Нужен хотя бы один ингредиент.'
+            })
 
-        tags = attrs.get('tags') or []
+        ingredient_ids = set()
+        for item in ingredients:
+            ing_id = item['id'].id
+            if ing_id in ingredient_ids:
+                raise serializers.ValidationError({
+                    'ingredients': 'Ингредиенты не должны дублироваться.'
+                })
+            ingredient_ids.add(ing_id)
+
         if not tags:
-            errors['tags'] = 'Нужен хотя бы один тег.'
-        else:
-            try:
-                tag_ids = [t.id if hasattr(t, 'id') else int(t) for t in tags]
-            except Exception:
-                errors['tags'] = 'Неверный идентификатор тега.'
-            else:
-                if len(tag_ids) != len(set(tag_ids)):
-                    errors['tags'] = (
-                        'Теги не должны дублироваться.'
-                    )
+            raise serializers.ValidationError({
+                'tags': 'Нужен хотя бы один тег.'
+            })
 
-        cooking_time = attrs.get('cooking_time')
-        if cooking_time is None or cooking_time <= 0:
-            errors['cooking_time'] = 'Время готовки должно быть больше нуля.'
+        tag_ids = [tag.id for tag in tags]
+        if len(tag_ids) != len(set(tag_ids)):
+            raise serializers.ValidationError({
+                'tags': 'Теги не должны дублироваться.'
+            })
 
-        if 'image' in attrs and attrs.get('image') in (None, ''):
-            errors['image'] = 'Поле image не может быть пустым.'
-
-        if errors:
-            raise serializers.ValidationError(errors)
         return attrs
 
     def create(self, validated_data):

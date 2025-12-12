@@ -1,6 +1,13 @@
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
+
+
+MIN_INGREDIENT_AMOUNT = 1
+MAX_INGREDIENT_AMOUNT = 32_000
+
+MIN_COOKING_TIME = 1
+MAX_COOKING_TIME = 32_000
 
 
 class Tag(models.Model):
@@ -67,7 +74,16 @@ class Recipe(models.Model):
         verbose_name='Описание рецепта'
     )
     cooking_time = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1)],
+        validators=[
+            MinValueValidator(
+                MIN_COOKING_TIME,
+                message='Время должно быть ≥ 1'
+            ),
+            MaxValueValidator(
+                MAX_COOKING_TIME,
+                message='Время слишком большое'
+            )
+        ],
         verbose_name='Время приготовления в минутах'
     )
     pub_date = models.DateTimeField(
@@ -111,9 +127,16 @@ class RecipeIngredient(models.Model):
         verbose_name='Ингредиент'
     )
     amount = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(
-            1, message='Количество должно быть > 0'
-        )],
+        validators=[
+            MinValueValidator(
+                MIN_INGREDIENT_AMOUNT,
+                message='Количество должно быть ≥ 1'
+            ),
+            MaxValueValidator(
+                MAX_INGREDIENT_AMOUNT,
+                message='Количество слишком большое'
+            )
+        ],
         verbose_name='Количество ингредиента'
     )
 
@@ -121,6 +144,7 @@ class RecipeIngredient(models.Model):
         verbose_name = 'Ингредиент в рецепте'
         verbose_name_plural = 'Ингредиенты в рецептах'
         unique_together = ('recipe', 'ingredient')
+        ordering = ('recipe', 'ingredient')
 
     def __str__(self):
         return f'{self.ingredient.name} в {self.recipe.name}: {self.amount}'
@@ -146,6 +170,7 @@ class Favorite(models.Model):
         verbose_name = 'Избранный рецепт'
         verbose_name_plural = 'Избранные рецепты'
         unique_together = ('user', 'recipe')
+        ordering = ('user')
 
     def __str__(self):
         return (f'Избранный рецепт {self.recipe.name} '
@@ -172,6 +197,7 @@ class Purchase(models.Model):
         verbose_name = 'Покупка'
         verbose_name_plural = 'Покупки'
         unique_together = ('user', 'recipe')
+        ordering = ('user',)
 
     def __str__(self):
         return (f'Покупка рецепта {self.recipe.name} '
