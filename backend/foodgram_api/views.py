@@ -301,10 +301,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_link(self, request, pk=None):
         """Возвращает короткую ссылку на рецепт."""
 
-        relative_url = f"/recipes/{pk}/"
-        short_link = request.build_absolute_uri(relative_url)
+        short_link = request.build_absolute_uri(f"/recipes/{pk}/")
 
         return Response(
-            {"short-link": short_link},
+            {"short_link": short_link},
             status=status.HTTP_200_OK
         )
