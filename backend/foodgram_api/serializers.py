@@ -299,26 +299,26 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def set_ingredients(self, recipe, ingredients_data):
+        recipe_ingredients = [
+            RecipeIngredient(
+                recipe=recipe,
+                ingredient=item['id'],
+                amount=item['amount']
+            )
+            for item in ingredients_data
+        ]
+        RecipeIngredient.objects.bulk_create(recipe_ingredients)
+
     def create(self, validated_data):
         ingredients_data = validated_data.pop('ingredients')
         tags = validated_data.pop('tags')
-
         author = self.context['request'].user
 
         with transaction.atomic():
             recipe = Recipe.objects.create(author=author, **validated_data)
             recipe.tags.set(tags)
-
-            recipe_ingredients = []
-            for item in ingredients_data:
-                recipe_ingredients.append(
-                    RecipeIngredient(
-                        recipe=recipe,
-                        ingredient=item['id'],
-                        amount=item['amount']
-                    )
-                )
-            RecipeIngredient.objects.bulk_create(recipe_ingredients)
+            self.set_ingredients(recipe, ingredients_data)
 
         return recipe
 
@@ -334,16 +334,7 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
 
             if ingredients_data is not None:
                 instance.recipe_ingredients.all().delete()
-                recipe_ingredients = []
-                for item in ingredients_data:
-                    recipe_ingredients.append(
-                        RecipeIngredient(
-                            recipe=instance,
-                            ingredient=item['id'],
-                            amount=item['amount']
-                        )
-                    )
-                RecipeIngredient.objects.bulk_create(recipe_ingredients)
+                self.set_ingredients(instance, ingredients_data)
 
             if tags is not None:
                 instance.tags.set(tags)
