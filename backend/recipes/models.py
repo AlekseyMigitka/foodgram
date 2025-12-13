@@ -170,7 +170,7 @@ class Favorite(models.Model):
         verbose_name = 'Избранный рецепт'
         verbose_name_plural = 'Избранные рецепты'
         unique_together = ('user', 'recipe')
-        ordering = ('user')
+        ordering = ('user',)
 
     def __str__(self):
         return (f'Избранный рецепт {self.recipe.name} '
