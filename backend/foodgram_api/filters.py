@@ -38,8 +38,8 @@ class RecipeFilter(FilterSet):
         if not user.is_authenticated:
             return queryset.none() if value else queryset
         if value:
-            return queryset.filter(purchases_by__user=user)
-        return queryset.exclude(purchases_by__user=user)
+            return queryset.filter(purchased_by__user=user)
+        return queryset.exclude(purchased_by__user=user)
 
 
 class IngredientFilter(FilterSet):
